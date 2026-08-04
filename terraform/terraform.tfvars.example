@@ -1,0 +1,32 @@
+# Copy this file to terraform.tfvars and fill in your own values.
+# terraform.tfvars is git-ignored on purpose -- never commit real values.
+
+aws_region  = "us-east-1"
+environment = "dev"
+
+cluster_name    = "gitops-eks-cluster"
+cluster_version = "1.29"
+
+vpc_cidr             = "10.0.0.0/16"
+private_subnet_cidrs = ["10.0.0.0/20", "10.0.16.0/20", "10.0.32.0/20"]
+public_subnet_cidrs  = ["10.0.128.0/20", "10.0.144.0/20", "10.0.160.0/20"]
+
+node_instance_types = ["t3.medium"]
+node_desired_size   = 3
+node_min_size       = 2
+node_max_size       = 6
+node_disk_size      = 50
+
+argocd_namespace     = "argocd"
+argocd_chart_version = "7.6.12"
+
+# Point this at YOUR fork of this repository -- ArgoCD clones this URL.
+git_repo_url        = "https://github.com/your-org/multicloud-gitops.git"
+git_target_revision = "main"
+root_app_path       = "gitops"
+
+tags = {
+  Project     = "multicloud-gitops"
+  Environment = "dev"
+  ManagedBy   = "terraform"
+}

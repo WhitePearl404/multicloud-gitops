@@ -1,0 +1,35 @@
+# NOTE: repoURL below is a placeholder -- see the comment in frontend.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backend
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/part-of: microservices-app
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/your-org/multicloud-gitops.git
+    targetRevision: main
+    path: k8s-manifests/backend
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: workloads
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

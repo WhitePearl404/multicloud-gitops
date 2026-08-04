@@ -1,0 +1,56 @@
+# App-of-Apps root Application.
+#
+# This is the ONLY manifest Terraform ever applies by hand
+# (via terraform/modules/argocd). Every other Application in this
+# repository (gitops/apps/*, gitops/infrastructure/*) is discovered
+# and synced by ArgoCD itself once this root app exists -- that is
+# the entire point of the App-of-Apps pattern: one bootstrap object,
+# zero further kubectl/helm commands.
+#
+# NOTE: ${...} placeholders are rendered by Terraform's templatefile()
+# function (see terraform/modules/argocd/main.tf). If you ever apply
+# this file by hand with kubectl, replace the placeholders first.
+#
+# `path` below is "gitops" (the whole folder, recursed), so ArgoCD
+# discovers three things automatically: gitops/apps/*.yaml,
+# gitops/infrastructure/*.yaml, AND this file itself. Argo managing
+# its own root Application is a standard, supported App-of-Apps
+# idiom (self-management) -- it is intentional, not an oversight.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-app-of-apps
+  namespace: ${argocd_namespace}
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/part-of: platform
+spec:
+  project: default
+
+  source:
+    repoURL: ${git_repo_url}
+    targetRevision: ${git_target_revision}
+    path: ${root_app_path}
+    directory:
+      recurse: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ${argocd_namespace}
+
+  syncPolicy:
+    automated:
+      prune: true      # delete resources removed from Git
+      selfHeal: true    # revert any manual/out-of-band cluster drift
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

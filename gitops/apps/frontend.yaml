@@ -1,0 +1,37 @@
+# NOTE: repoURL below is a placeholder. After you fork this repository,
+# replace it (and the matching value in backend.yaml / redis.yaml and in
+# terraform/terraform.tfvars) with your own fork's clone URL.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: frontend
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/part-of: microservices-app
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/your-org/multicloud-gitops.git
+    targetRevision: main
+    path: k8s-manifests/frontend
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: workloads
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

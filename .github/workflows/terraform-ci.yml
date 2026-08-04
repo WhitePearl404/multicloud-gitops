@@ -1,0 +1,89 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-ci.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VERSION: "1.6.6"
+  TF_WORKING_DIR: "terraform"
+
+jobs:
+  lint-and-validate:
+    name: fmt / validate / tfsec
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: terraform fmt (check only, never rewrites in CI)
+        id: fmt
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: terraform init (no backend -- validate doesn't need remote state)
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        id: validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform validate -no-color
+
+      - name: Run tfsec
+        id: tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: ${{ env.TF_WORKING_DIR }}
+          soft_fail: false
+
+      - name: Comment plan/lint results on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fmtOutcome = "${{ steps.fmt.outcome }}";
+            const validateOutcome = "${{ steps.validate.outcome }}";
+            const tfsecOutcome = "${{ steps.tfsec.outcome }}";
+            const body = [
+              "### Terraform CI results",
+              `- \`terraform fmt -check\`: ${fmtOutcome}`,
+              `- \`terraform validate\`: ${validateOutcome}`,
+              `- \`tfsec\`: ${tfsecOutcome}`,
+            ].join("\n");
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+  auto-merge:
+    name: Auto-merge trusted PRs
+    needs: lint-and-validate
+    runs-on: ubuntu-latest
+    # Safety gate: only auto-merge PRs we already trust the intent of --
+    # Dependabot version bumps, or a human explicitly opting in with the
+    # "automerge" label. Nothing else merges without a manual review click.
+    if: >
+      needs.lint-and-validate.result == 'success' &&
+      (github.actor == 'dependabot[bot]' || contains(github.event.pull_request.labels.*.name, 'automerge'))
+    steps:
+      - name: Enable GitHub auto-merge (squash)
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash

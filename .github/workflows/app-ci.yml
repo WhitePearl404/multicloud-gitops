@@ -1,0 +1,94 @@
+name: Application & Manifest CI
+
+on:
+  pull_request:
+    paths:
+      - "k8s-manifests/**"
+      - "gitops/**"
+      - "frontend/**"
+      - "backend/**"
+      - ".github/workflows/app-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "k8s-manifests/**"
+      - "gitops/**"
+      - "frontend/**"
+      - "backend/**"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  validate-manifests:
+    name: Validate Kubernetes & ArgoCD YAML
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: YAML syntax check (every manifest must at least parse)
+        run: |
+          set -euo pipefail
+          pip install --quiet yamllint
+          yamllint -d "{extends: default, rules: {line-length: disable}}" \
+            k8s-manifests gitops
+
+      - name: Schema-validate Kubernetes manifests with kubeconform
+        uses: docker://ghcr.io/yannh/kubeconform:latest
+        with:
+          entrypoint: /kubeconform
+          args: >-
+            -summary
+            -ignore-missing-schemas
+            -kubernetes-version 1.29.0
+            k8s-manifests/frontend/deployment.yaml
+            k8s-manifests/frontend/service.yaml
+            k8s-manifests/frontend/ingress.yaml
+            k8s-manifests/backend/deployment.yaml
+            k8s-manifests/backend/service.yaml
+            k8s-manifests/redis/deployment.yaml
+            k8s-manifests/redis/service.yaml
+
+  build-and-push:
+    name: Build & push service images
+    needs: validate-manifests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [frontend, backend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check whether ${{ matrix.service }}/Dockerfile exists yet
+        id: check
+        run: |
+          if [[ -f "${{ matrix.service }}/Dockerfile" ]]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No ${{ matrix.service }}/Dockerfile yet -- skipping build. This repo ships infra + GitOps only; add application source to enable this job."
+          fi
+
+      - name: Log in to GHCR
+        if: steps.check.outputs.found == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        if: steps.check.outputs.found == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.service }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

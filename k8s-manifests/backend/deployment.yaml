@@ -1,0 +1,71 @@
+# SECURITY NOTE: REDIS_PASSWORD below comes from a Secret named
+# "redis-credentials" (key: redis-password). That Secret is deliberately
+# NOT a file in this repo -- see the README security section. In this
+# dev setup it's created once with `kubectl create secret`; in a real
+# production repo you would commit an encrypted SealedSecret (produced
+# with `kubeseal`) here instead, which is safe to store in Git because
+# only the in-cluster sealed-secrets controller can decrypt it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: workloads
+  labels:
+    app: backend
+    app.kubernetes.io/part-of: microservices-app
+spec:
+  replicas: 3
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          # Replace with your built + pushed image before the first sync.
+          image: ghcr.io/your-org/backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: REDIS_HOST
+              value: "redis.workloads.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: redis-password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000

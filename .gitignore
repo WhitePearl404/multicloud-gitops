@@ -1,0 +1,36 @@
+# --- Terraform ---
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Real values live in terraform.tfvars (never commit it) -- only the
+# .example file is meant to be in Git.
+*.tfvars
+!*.tfvars.example
+
+# Keep the lock file -- it pins provider versions for reproducible applies.
+!.terraform.lock.hcl
+
+# --- Node.js (frontend/, backend/) ---
+node_modules/
+npm-debug.log*
+.npm
+
+# --- Kubernetes / local kubeconfig, if ever copied into the repo ---
+kubeconfig
+*.kubeconfig
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
