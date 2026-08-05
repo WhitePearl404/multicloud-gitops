@@ -1,3 +1,4 @@
+---
 # NOTE: repoURL below is a placeholder -- see the comment in frontend.yaml.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -12,7 +13,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/your-org/multicloud-gitops.git
+    repoURL: https://github.com/WhitePearl404/multicloud-gitops.git
     targetRevision: main
     path: k8s-manifests/backend
 

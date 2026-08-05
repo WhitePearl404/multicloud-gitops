@@ -1,3 +1,4 @@
+---
 # NOTE: repoURL below is a placeholder. After you fork this repository,
 # replace it (and the matching value in backend.yaml / redis.yaml and in
 # terraform/terraform.tfvars) with your own fork's clone URL.
@@ -14,7 +15,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/your-org/multicloud-gitops.git
+    repoURL: https://github.com/WhitePearl404/multicloud-gitops.git
     targetRevision: main
     path: k8s-manifests/frontend
 

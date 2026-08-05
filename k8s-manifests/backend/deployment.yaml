@@ -1,3 +1,4 @@
+---
 # SECURITY NOTE: REDIS_PASSWORD below comes from a Secret named
 # "redis-credentials" (key: redis-password). That Secret is deliberately
 # NOT a file in this repo -- see the README security section. In this
@@ -24,10 +25,13 @@ spec:
       labels:
         app: backend
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: backend
           # Replace with your built + pushed image before the first sync.
-          image: ghcr.io/your-org/backend:latest
+          image: ghcr.io/WhitePearl404/backend:latest
+          # image: backend:local
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

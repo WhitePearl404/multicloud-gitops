@@ -1,3 +1,4 @@
+---
 # App-of-Apps root Application.
 #
 # This is the ONLY manifest Terraform ever applies by hand

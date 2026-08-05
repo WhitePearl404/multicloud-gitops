@@ -1,3 +1,4 @@
+---
 # Requires a ClusterIssuer named "letsencrypt-prod" to exist (created once,
 # out of band -- see the README security section for why this isn't
 # committed to Git with a real ACME email address baked in).

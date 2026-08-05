@@ -1,3 +1,4 @@
+---
 # SECURITY NOTE: see the matching note in k8s-manifests/backend/deployment.yaml --
 # the "redis-credentials" Secret is created out of band, never committed
 # in plain text. --requirepass reads the password from an env var so the

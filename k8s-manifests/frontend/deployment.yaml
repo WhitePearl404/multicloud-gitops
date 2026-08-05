@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,10 +18,13 @@ spec:
       labels:
         app: frontend
     spec:
+      imagePullSecrets:
+        - name: ghcr-secret
       containers:
         - name: frontend
           # Replace with your built + pushed image before the first sync.
-          image: ghcr.io/your-org/frontend:latest
+          image: ghcr.io/WhitePearl404/frontend:latest
+          # image: frontend:local
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
