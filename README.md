@@ -9,13 +9,6 @@ anyone touches** — ArgoCD does the rest.
 - **Workload:** Frontend + Backend API + Redis cache, three plain Kubernetes microservices
 - **Automation:** GitHub Actions for Terraform linting/validation/security scanning, plus manifest validation and image builds
 
-> **Scope note:** the task that generated this repo mentioned a GCP/GKE
-> module in its opening summary, but the file tree it asked for only
-> specifies an AWS/EKS module — that's what is implemented below. Adding a
-> `terraform/modules/gke` module that mirrors `modules/eks` (VPC, cluster,
-> node pool, Workload Identity instead of IRSA) is a natural next step if
-> you want true multi-cloud; happy to add it on request.
-
 ---
 
 ## 1. Architecture
