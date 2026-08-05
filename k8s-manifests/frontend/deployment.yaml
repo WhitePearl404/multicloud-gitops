@@ -23,8 +23,7 @@ spec:
       containers:
         - name: frontend
           # Replace with your built + pushed image before the first sync.
-          image: ghcr.io/WhitePearl404/frontend:latest
-          # image: frontend:local
+          image: ghcr.io/whitepearl404/frontend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

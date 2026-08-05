@@ -30,8 +30,7 @@ spec:
       containers:
         - name: backend
           # Replace with your built + pushed image before the first sync.
-          image: ghcr.io/WhitePearl404/backend:latest
-          # image: backend:local
+          image: ghcr.io/whitepearl404/backend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
