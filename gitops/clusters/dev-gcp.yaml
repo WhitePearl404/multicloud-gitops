@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: prod-aws-apps
+  name: dev-gcp-apps
   namespace: ${argocd_namespace}
   labels:
     app.kubernetes.io/part-of: platform
@@ -11,16 +11,16 @@ spec:
       elements:
       - appName: frontend
         appPath: gitops/apps/frontend
-        valuesFile: values-prod.yaml
+        valuesFile: values-dev.yaml
       - appName: backend
         appPath: gitops/apps/backend
-        valuesFile: values-prod.yaml
+        valuesFile: values-dev.yaml
       - appName: redis
         appPath: gitops/apps/redis
-        valuesFile: values-prod.yaml
+        valuesFile: values-dev.yaml
   template:
     metadata:
-      name: '{{appName}}-prod-aws'
+      name: '{{appName}}-dev-gcp'
       labels:
         app.kubernetes.io/part-of: platform
     spec:

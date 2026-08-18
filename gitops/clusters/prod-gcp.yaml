@@ -2,27 +2,36 @@ apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: prod-gcp-apps
-  namespace: argocd
+  namespace: ${argocd_namespace}
+  labels:
+    app.kubernetes.io/part-of: platform
 spec:
   generators:
-    - list:
-        elements:
-          - appName: frontend
-            appPath: gitops/apps/frontend.yaml
-          - appName: backend
-            appPath: gitops/apps/backend.yaml
-          - appName: redis
-            appPath: gitops/apps/redis.yaml
+  - list:
+      elements:
+      - appName: frontend
+        appPath: gitops/apps/frontend
+        valuesFile: values-prod.yaml
+      - appName: backend
+        appPath: gitops/apps/backend
+        valuesFile: values-prod.yaml
+      - appName: redis
+        appPath: gitops/apps/redis
+        valuesFile: values-prod.yaml
   template:
     metadata:
-      name: '{{appName}}-gcp'
-      namespace: argocd
+      name: '{{appName}}-prod-gcp'
+      labels:
+        app.kubernetes.io/part-of: platform
     spec:
       project: default
       source:
         repoURL: ${git_repo_url}
         targetRevision: ${git_target_revision}
         path: '{{appPath}}'
+        helm:
+          valueFiles:
+            - '{{valuesFile}}'
       destination:
         server: https://kubernetes.default.svc
         namespace: workloads
