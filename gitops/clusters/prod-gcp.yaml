@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: prod-gcp-apps
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - appName: frontend
+            appPath: gitops/apps/frontend.yaml
+          - appName: backend
+            appPath: gitops/apps/backend.yaml
+          - appName: redis
+            appPath: gitops/apps/redis.yaml
+  template:
+    metadata:
+      name: '{{appName}}-gcp'
+      namespace: argocd
+    spec:
+      project: default
+      source:
+        repoURL: ${git_repo_url}
+        targetRevision: ${git_target_revision}
+        path: '{{appPath}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: workloads
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
