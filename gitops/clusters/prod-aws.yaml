@@ -2,7 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: prod-aws-apps
-  namespace: ${argocd_namespace}
+  namespace: argocd
   labels:
     app.kubernetes.io/part-of: platform
 spec:
@@ -23,8 +23,8 @@ spec:
     spec:
       project: default
       source:
-        repoURL: ${git_repo_url}
-        targetRevision: ${git_target_revision}
+        repoURL: https://github.com/WhitePearl404/multicloud-gitops.git
+        targetRevision: main
         path: '{{appPath}}'
       destination:
         server: https://kubernetes.default.svc

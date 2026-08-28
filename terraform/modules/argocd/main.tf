@@ -58,6 +58,7 @@ resource "kubectl_manifest" "root_app" {
     git_repo_url        = var.git_repo_url
     git_target_revision = var.git_target_revision
     root_app_path       = var.root_app_path
+    root_app_include    = var.root_app_include
     argocd_namespace    = kubernetes_namespace.argocd.metadata[0].name
   })
 

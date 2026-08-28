@@ -28,6 +28,11 @@ variable "root_app_path" {
   default = "gitops"
 }
 
+variable "root_app_include" {
+  type    = string
+  default = "clusters/prod-gcp.yaml"
+}
+
 variable "node_pools" {
   type = list(object({
     name          = string
