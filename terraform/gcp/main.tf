@@ -2,6 +2,7 @@ module "gke" {
   source = "../modules/gke"
 
   project_id  = var.project_id
+  region      = var.region
   location    = var.location
   name        = var.cluster_name
   min_version = var.k8s_version

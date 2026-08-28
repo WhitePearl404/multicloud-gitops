@@ -1,4 +1,5 @@
 variable "project_id" { type = string }
+variable "region" { type = string }
 variable "location" { type = string }
 variable "cluster_name" { type = string }
 variable "k8s_version" { type = string }
