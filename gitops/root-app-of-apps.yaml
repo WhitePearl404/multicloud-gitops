@@ -33,7 +33,7 @@ spec:
     path: ${root_app_path}
     directory:
       recurse: true
-      include: ${root_app_include}
+      include: "${root_app_include}"
 
   destination:
     server: https://kubernetes.default.svc

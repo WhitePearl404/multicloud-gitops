@@ -123,5 +123,5 @@ variable "root_app_path" {
 variable "root_app_include" {
   description = "ApplicationSet manifest selected by this cluster's ArgoCD root app"
   type        = string
-  default     = "clusters/prod-aws.yaml"
+  default     = "{clusters/prod-aws.yaml,infrastructure/*.yaml,policies/*-application.yaml}"
 }

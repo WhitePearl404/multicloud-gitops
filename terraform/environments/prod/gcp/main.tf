@@ -22,7 +22,7 @@ module "argocd" {
   git_repo_url = var.git_repo_url
   git_target_revision = var.git_target_revision
   root_app_path = "gitops"
-  root_app_include = "clusters/prod-gcp.yaml"
+  root_app_include = "{clusters/prod-gcp.yaml,infrastructure/*.yaml,policies/*-application.yaml}"
   root_app_manifest_path = "${path.root}/../../../../gitops/root-app-of-apps.yaml"
   cluster_name = module.gke.name
 }

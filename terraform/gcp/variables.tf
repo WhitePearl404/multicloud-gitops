@@ -30,7 +30,7 @@ variable "root_app_path" {
 
 variable "root_app_include" {
   type    = string
-  default = "clusters/prod-gcp.yaml"
+  default = "{clusters/prod-gcp.yaml,infrastructure/*.yaml,policies/*-application.yaml}"
 }
 
 variable "node_pools" {
