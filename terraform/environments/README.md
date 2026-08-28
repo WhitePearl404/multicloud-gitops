@@ -51,3 +51,29 @@ terraform -chdir=terraform/environments/dev/gcp validate
 
 Do not use `terraform init -backend-config=backend.hcl` during local-only
 testing; that intentionally connects to the configured state service.
+
+## No-cloud planning
+
+The complete environment roots configure Kubernetes, Helm, and Kubectl
+providers from managed-cluster outputs. A full plan can therefore evaluate
+cloud authentication data sources or contact a cluster. For a local-only
+Terraform check, plan only the cloud-cluster module with refresh and state
+locking disabled:
+
+```bash
+AWS_EC2_METADATA_DISABLED=true AWS_SHARED_CREDENTIALS_FILE=/dev/null \
+  terraform -chdir=terraform/environments/dev/aws plan \
+  -refresh=false -lock=false -input=false \
+  -var-file=terraform.tfvars.example -target=module.eks
+
+GOOGLE_APPLICATION_CREDENTIALS=/dev/null \
+  terraform -chdir=terraform/environments/dev/gcp plan \
+  -refresh=false -lock=false -input=false \
+  -var-file=terraform.tfvars.example -target=module.gke
+```
+
+Repeat for staging and production as needed. The `-target` flag is
+intentional: it prevents evaluation of the ArgoCD installation and its
+cluster-authenticated providers. These commands produce a plan only; they
+cannot create resources. Do not run `terraform apply`, remove `-target`, or
+configure a remote backend during local testing.
