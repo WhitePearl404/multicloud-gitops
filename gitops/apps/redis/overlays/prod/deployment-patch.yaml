@@ -1,10 +1,10 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: redis
   namespace: workloads
 spec:
-  replicas: 2
+  replicas: 1
   template:
     spec:
       containers:
