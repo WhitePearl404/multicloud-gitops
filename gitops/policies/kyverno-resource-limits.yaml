@@ -12,10 +12,21 @@ spec:
         - Pod
         - Deployment
         - StatefulSet
+    exclude:
+      resources:
+        namespaces:
+        - argocd
+        - cert-manager
+        - ingress-nginx
+        - kube-node-lease
+        - kube-public
+        - kube-system
+        - kyverno
+        - observability
     validate:
       message: "All containers must set both requests and limits for cpu and memory."
-      pattern:
-        spec:
+      anyPattern:
+      - spec:
           containers:
           - resources:
               limits:
@@ -24,3 +35,14 @@ spec:
               requests:
                 cpu: "*"
                 memory: "*"
+      - spec:
+          template:
+            spec:
+              containers:
+              - resources:
+                  limits:
+                    cpu: "*"
+                    memory: "*"
+                  requests:
+                    cpu: "*"
+                    memory: "*"
