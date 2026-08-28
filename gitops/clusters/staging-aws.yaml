@@ -10,14 +10,11 @@ spec:
   - list:
       elements:
       - appName: frontend
-        appPath: gitops/apps/frontend
-        valuesFile: values-staging.yaml
+        appPath: gitops/apps/frontend/overlays/staging
       - appName: backend
-        appPath: gitops/apps/backend
-        valuesFile: values-staging.yaml
+        appPath: gitops/apps/backend/overlays/staging
       - appName: redis
-        appPath: gitops/apps/redis
-        valuesFile: values-staging.yaml
+        appPath: gitops/apps/redis/overlays/staging
   template:
     metadata:
       name: '{{appName}}-staging-aws'
@@ -29,9 +26,6 @@ spec:
         repoURL: ${git_repo_url}
         targetRevision: ${git_target_revision}
         path: '{{appPath}}'
-        helm:
-          valueFiles:
-            - '{{valuesFile}}'
       destination:
         server: https://kubernetes.default.svc
         namespace: workloads

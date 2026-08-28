@@ -10,14 +10,11 @@ spec:
   - list:
       elements:
       - appName: frontend
-        appPath: gitops/apps/frontend
-        valuesFile: values-prod.yaml
+        appPath: gitops/apps/frontend/overlays/prod
       - appName: backend
-        appPath: gitops/apps/backend
-        valuesFile: values-prod.yaml
+        appPath: gitops/apps/backend/overlays/prod
       - appName: redis
-        appPath: gitops/apps/redis
-        valuesFile: values-prod.yaml
+        appPath: gitops/apps/redis/overlays/prod
   template:
     metadata:
       name: '{{appName}}-prod-aws'
@@ -29,9 +26,6 @@ spec:
         repoURL: ${git_repo_url}
         targetRevision: ${git_target_revision}
         path: '{{appPath}}'
-        helm:
-          valueFiles:
-            - '{{valuesFile}}'
       destination:
         server: https://kubernetes.default.svc
         namespace: workloads
