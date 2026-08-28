@@ -13,17 +13,21 @@ module "gke" {
 module "argocd" {
   source = "../modules/argocd"
 
-  cluster_endpoint       = module.gke.endpoint
-  cluster_ca_certificate = base64decode(module.gke.master_auth[0].cluster_ca_certificate)
-  cluster_name           = module.gke.name
+  providers = {
+    kubernetes.gke = kubernetes.gke
+    helm.gke       = helm.gke
+    kubectl.gke    = kubectl.gke
+  }
 
-  helm_values = yamlencode({
-    configs = {
-      params = {
-        "server.insecure" = true
-      }
-    }
-  })
+  depends_on = [module.gke]
+
+  argocd_namespace       = var.argocd_namespace
+  argocd_chart_version   = var.argocd_chart_version
+  git_repo_url           = var.git_repo_url
+  git_target_revision    = var.git_target_revision
+  root_app_path          = var.root_app_path
+  root_app_manifest_path = "${path.root}/../gitops/root-app-of-apps.yaml"
+  cluster_name           = module.gke.name
 }
 
 output "gke_cluster_name" {

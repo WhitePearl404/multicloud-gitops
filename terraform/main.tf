@@ -7,16 +7,16 @@ module "eks" {
 
   cluster_name          = var.cluster_name
   cluster_version       = var.cluster_version
-  vpc_cidr              = var.vpc_cidr
-  private_subnet_cidrs  = var.private_subnet_cidrs
-  public_subnet_cidrs   = var.public_subnet_cidrs
-  node_instance_types   = var.node_instance_types
-  node_desired_size     = var.node_desired_size
-  node_min_size         = var.node_min_size
-  node_max_size         = var.node_max_size
-  node_disk_size        = var.node_disk_size
-  environment           = var.environment
-  tags                  = var.tags
+  vpc_cidr               = var.vpc_cidr
+  private_subnet_cidrs   = var.private_subnet_cidrs
+  public_subnet_cidrs    = var.public_subnet_cidrs
+  node_instance_types    = var.node_instance_types
+  node_desired_size      = var.node_desired_size
+  node_min_size          = var.node_min_size
+  node_max_size          = var.node_max_size
+  node_disk_size         = var.node_disk_size
+  environment            = var.environment
+  tags                   = var.tags
 }
 
 ##############################################
@@ -29,6 +29,12 @@ module "eks" {
 
 module "argocd" {
   source = "./modules/argocd"
+
+  providers = {
+    kubernetes.gke = kubernetes
+    helm.gke       = helm
+    kubectl.gke    = kubectl
+  }
 
   depends_on = [module.eks]
 

@@ -3,6 +3,8 @@
 ##############################################
 
 resource "kubernetes_namespace" "argocd" {
+  provider = kubernetes.gke
+
   metadata {
     name = var.argocd_namespace
 
@@ -20,6 +22,8 @@ resource "kubernetes_namespace" "argocd" {
 ##############################################
 
 resource "helm_release" "argocd" {
+  provider = helm.gke
+
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
@@ -48,11 +52,13 @@ resource "helm_release" "argocd" {
 ##############################################
 
 resource "kubectl_manifest" "root_app" {
+  provider = kubectl.gke
+
   yaml_body = templatefile(var.root_app_manifest_path, {
-    git_repo_url         = var.git_repo_url
-    git_target_revision  = var.git_target_revision
-    root_app_path        = var.root_app_path
-    argocd_namespace      = kubernetes_namespace.argocd.metadata[0].name
+    git_repo_url        = var.git_repo_url
+    git_target_revision = var.git_target_revision
+    root_app_path       = var.root_app_path
+    argocd_namespace    = kubernetes_namespace.argocd.metadata[0].name
   })
 
   depends_on = [helm_release.argocd]
