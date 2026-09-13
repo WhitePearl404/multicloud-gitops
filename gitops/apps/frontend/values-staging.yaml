@@ -1,0 +1,11 @@
+replicaCount: 2
+resources:
+  requests:
+    cpu: "150m"
+    memory: "192Mi"
+  limits:
+    cpu: "300m"
+    memory: "384Mi"
+ingress:
+  enabled: true
+  host: frontend.staging.example.com

@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: workloads-governance
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app.kubernetes.io/part-of: platform-governance
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/WhitePearl404/multicloud-gitops.git
+    targetRevision: main
+    path: gitops/platform/workloads
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: workloads
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

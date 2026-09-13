@@ -35,6 +35,37 @@ jobs:
           yamllint -d "{extends: default, rules: {line-length: disable}}" \
             k8s-manifests gitops
 
+      - name: Parse ApplicationSets and policy manifests
+        run: |
+          set -euo pipefail
+          ruby -e '
+            require "yaml"
+            Dir["gitops/clusters/*.yaml", "gitops/policies/*.yaml",
+                "gitops/infrastructure/*.yaml", "gitops/secrets/*.yaml"].sort.each do |file|
+              YAML.load_stream(File.read(file))
+              puts "YAML OK #{file}"
+            end
+          '
+
+      - name: Render Kustomize overlays
+        run: |
+          set -euo pipefail
+          for overlay in \
+            gitops/apps/frontend/overlays/dev \
+            gitops/apps/frontend/overlays/staging \
+            gitops/apps/frontend/overlays/prod \
+            gitops/apps/backend/overlays/dev \
+            gitops/apps/backend/overlays/staging \
+            gitops/apps/backend/overlays/prod \
+            gitops/apps/redis/overlays/dev \
+            gitops/apps/redis/overlays/staging \
+            gitops/apps/redis/overlays/prod; do
+            kubectl kustomize "$overlay" >/dev/null
+            echo "Kustomize OK $overlay"
+          done
+          kubectl kustomize gitops/platform/workloads >/dev/null
+          echo "Kustomize OK gitops/platform/workloads"
+
       - name: Schema-validate Kubernetes manifests with kubeconform
         uses: docker://ghcr.io/yannh/kubeconform:latest
         with:

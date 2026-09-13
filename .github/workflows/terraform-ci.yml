@@ -42,6 +42,23 @@ jobs:
         working-directory: ${{ env.TF_WORKING_DIR }}
         run: terraform validate -no-color
 
+      - name: Validate all environment roots without remote state
+        shell: bash
+        run: |
+          set -euo pipefail
+          roots=(
+            terraform/environments/dev/aws
+            terraform/environments/dev/gcp
+            terraform/environments/staging/aws
+            terraform/environments/staging/gcp
+            terraform/environments/prod/aws
+            terraform/environments/prod/gcp
+          )
+          for root in "${roots[@]}"; do
+            terraform -chdir="$root" init -backend=false -input=false >/dev/null
+            terraform -chdir="$root" validate -no-color
+          done
+
       - name: Run tfsec
         id: tfsec
         uses: aquasecurity/tfsec-action@v1.0.3

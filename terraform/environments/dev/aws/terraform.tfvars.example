@@ -1,0 +1,2 @@
+aws_region  = "us-east-1"
+git_repo_url = "https://github.com/your-org/multicloud-gitops.git"

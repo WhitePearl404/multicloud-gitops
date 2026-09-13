@@ -1,0 +1,20 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: image-security-baseline
+spec:
+  validationFailureAction: audit
+  rules:
+    - name: require-approved-image-registry
+      match:
+        resources:
+          kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+      validate:
+        message: Images must come from an approved registry.
+        pattern:
+          spec:
+            =(containers):
+              - image: "ghcr.io/whitepearl404/* | docker.io/library/* | quay.io/* | registry.k8s.io/*"

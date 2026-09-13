@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: staging-aws-apps
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: platform
+spec:
+  generators:
+  - list:
+      elements:
+      - appName: frontend
+        appPath: gitops/apps/frontend/overlays/staging
+      - appName: backend
+        appPath: gitops/apps/backend/overlays/staging
+      - appName: redis
+        appPath: gitops/apps/redis/overlays/staging
+  template:
+    metadata:
+      name: '{{appName}}-staging-aws'
+      labels:
+        app.kubernetes.io/part-of: platform
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/WhitePearl404/multicloud-gitops.git
+        targetRevision: main
+        path: '{{appPath}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: workloads
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true

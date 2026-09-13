@@ -1,0 +1,48 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: workload-security-baseline
+spec:
+  validationFailureAction: enforce
+  rules:
+    - name: require-non-root
+      match:
+        resources:
+          kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+      exclude:
+        resources:
+          namespaces:
+            - argocd
+            - cert-manager
+            - ingress-nginx
+            - kube-system
+            - kyverno
+            - observability
+      validate:
+        message: Application workloads must run as non-root.
+        anyPattern:
+          - spec:
+              securityContext:
+                runAsNonRoot: true
+          - spec:
+              template:
+                spec:
+                  securityContext:
+                    runAsNonRoot: true
+    - name: disallow-privileged
+      match:
+        resources:
+          kinds:
+            - Pod
+            - Deployment
+            - StatefulSet
+      validate:
+        message: Privileged containers are not permitted.
+        pattern:
+          spec:
+            =(containers):
+              - =(securityContext):
+                  =(privileged): "false"

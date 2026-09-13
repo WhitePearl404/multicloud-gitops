@@ -12,11 +12,9 @@
 # function (see terraform/modules/argocd/main.tf). If you ever apply
 # this file by hand with kubectl, replace the placeholders first.
 #
-# `path` below is "gitops" (the whole folder, recursed), so ArgoCD
-# discovers three things automatically: gitops/apps/*.yaml,
-# gitops/infrastructure/*.yaml, AND this file itself. Argo managing
-# its own root Application is a standard, supported App-of-Apps
-# idiom (self-management) -- it is intentional, not an oversight.
+# `path` below is "gitops/clusters" and `include` selects only the
+# ApplicationSet for the cluster running this ArgoCD instance. This is
+# important when EKS and GKE each run their own independent ArgoCD.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -35,6 +33,7 @@ spec:
     path: ${root_app_path}
     directory:
       recurse: true
+      include: "${root_app_include}"
 
   destination:
     server: https://kubernetes.default.svc

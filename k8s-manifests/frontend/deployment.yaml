@@ -62,3 +62,10 @@ spec:
         runAsNonRoot: true
         runAsUser: 101
         fsGroup: 101
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: frontend

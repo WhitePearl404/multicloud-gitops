@@ -27,6 +27,11 @@ variable "root_app_path" {
   default     = "gitops"
 }
 
+variable "root_app_include" {
+  description = "Glob selecting this ArgoCD instance's cluster ApplicationSet under root_app_path"
+  type        = string
+}
+
 variable "root_app_manifest_path" {
   description = "Local filesystem path to the root-app-of-apps.yaml template that Terraform renders and applies"
   type        = string

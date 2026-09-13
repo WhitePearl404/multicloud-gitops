@@ -1,0 +1,12 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: frontend
+  namespace: workloads
+spec:
+  tls:
+    - hosts:
+        - frontend.example.com
+      secretName: frontend-tls
+  rules:
+    - host: frontend.example.com

@@ -1,0 +1,11 @@
+replicaCount: 1
+resources:
+  requests:
+    cpu: "150m"
+    memory: "192Mi"
+  limits:
+    cpu: "300m"
+    memory: "384Mi"
+env:
+  - name: LOG_LEVEL
+    value: debug

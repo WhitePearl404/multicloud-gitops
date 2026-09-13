@@ -4,7 +4,7 @@
 # in plain text. --requirepass reads the password from an env var so the
 # value never appears in the container command itself.
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: redis
   namespace: workloads
@@ -17,6 +17,16 @@ spec:
   selector:
     matchLabels:
       app: redis
+  serviceName: redis
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
   template:
     metadata:
       labels:
@@ -30,6 +40,9 @@ spec:
           ports:
             - name: redis
               containerPort: 6379
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
           env:
             - name: REDIS_PASSWORD
               valueFrom:
