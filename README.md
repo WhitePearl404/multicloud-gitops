@@ -182,7 +182,8 @@ for overlay in \
 done
 ```
 
-Do not run AWS CLI, or GCP CLI commands during local-only testing.
+Do not run `terraform apply`, remote-backend initialization, AWS CLI, or GCP
+CLI commands during local-only testing.
 
 ## Results
 

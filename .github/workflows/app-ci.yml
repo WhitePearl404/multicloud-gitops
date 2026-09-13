@@ -41,7 +41,7 @@ jobs:
           ruby -e '
             require "yaml"
             Dir["gitops/clusters/*.yaml", "gitops/policies/*.yaml",
-                "gitops/infrastructure/*.yaml"].sort.each do |file|
+                "gitops/infrastructure/*.yaml", "gitops/secrets/*.yaml"].sort.each do |file|
               YAML.load_stream(File.read(file))
               puts "YAML OK #{file}"
             end
@@ -63,6 +63,8 @@ jobs:
             kubectl kustomize "$overlay" >/dev/null
             echo "Kustomize OK $overlay"
           done
+          kubectl kustomize gitops/platform/workloads >/dev/null
+          echo "Kustomize OK gitops/platform/workloads"
 
       - name: Schema-validate Kubernetes manifests with kubeconform
         uses: docker://ghcr.io/yannh/kubeconform:latest
