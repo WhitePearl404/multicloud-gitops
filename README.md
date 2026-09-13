@@ -278,12 +278,10 @@ kubectl -n argocd get applicationsets
 └── scripts/
 ```
 
-## Screenshots / Demo
+## Demo
 
-No screenshots are committed currently. The local demonstration used a
-disposable kind cluster, local ArgoCD, a temporary Git mirror, and server-side
-Kubernetes dry-runs. The cluster and temporary Git daemon were deleted after
-testing.
+The local demonstration used a disposable kind cluster, local ArgoCD, a temporary Git mirror, and server-side
+Kubernetes dry-runs. The cluster and temporary Git daemon were deleted after testing.
 
 ## References
 
