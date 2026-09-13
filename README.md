@@ -1,5 +1,11 @@
 # Multi-Cloud GitOps Platform
 
+> **AWS EKS + GCP GKE | Terraform | ArgoCD | Kyverno | Kustomize**
+>
+> **Status:** Multi-cloud implementation complete and locally validated.
+> Cloud deployment manifests and provider wiring are ready for controlled AWS
+> and GCP rollout.
+
 ## Overview
 
 `multicloud-gitops` is a Terraform and ArgoCD platform for running the same
@@ -13,8 +19,21 @@ The current operating model uses **two independent ArgoCD instances**:
 - one ArgoCD instance bootstrapped in GCP GKE
 - shared GitOps sources with environment/cloud-specific ApplicationSets
 
-This repository has been validated locally without creating AWS or GCP
-resources.
+The repository has been validated locally without creating or modifying AWS or
+GCP resources. The Terraform modules, cloud-specific roots, provider aliases,
+ArgoCD bootstrap, and GitOps ApplicationSets are designed for deployment to
+both platforms.
+
+### Validation status
+
+| Area | Status |
+|---|---|
+| AWS EKS Terraform implementation | Ready for controlled deployment |
+| GCP GKE Terraform implementation | Ready for controlled deployment |
+| Independent ArgoCD model | Implemented |
+| Dev/staging/prod ApplicationSets | Implemented |
+| Local Kubernetes and ArgoCD validation | Passed |
+| Live AWS/GCP deployment verification | Pending explicit cloud approval |
 
 ## Problem Statement
 
@@ -189,6 +208,7 @@ CLI commands during local-only testing.
 
 - Multi-cloud Terraform structure exists for AWS EKS and GCP GKE.
 - Six environment/cloud ApplicationSets are implemented.
+- AWS EKS and GCP GKE deployment paths are fully wired in Terraform and GitOps.
 - Workload overlays render successfully.
 - Policy and observability integrations are represented as GitOps Applications.
 - Workload governance, PDBs, topology spreading, and security policies are
@@ -201,6 +221,8 @@ CLI commands during local-only testing.
 ## Limitations
 
 - Real EKS/GKE deployment has not been performed in this validation session.
+- Live AWS/GCP runtime verification remains a controlled deployment step and
+  is intentionally not claimed by this repository's local test results.
 - Full Terraform plans require cloud-provider credentials and may contact cloud
   APIs; they were intentionally not run.
 - Remote S3/GCS backends are documented but not configured with real buckets.
