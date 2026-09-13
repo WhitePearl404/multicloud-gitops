@@ -1,314 +1,449 @@
-# Multi-Cloud GitOps & Infrastructure Platform
+# Multi-Cloud GitOps Platform
 
-An end-to-end, self-healing infrastructure repository. Terraform builds the
-cluster and installs ArgoCD. From that point on, **Git is the only thing
-anyone touches** — ArgoCD does the rest.
+> **AWS EKS + GCP GKE | Terraform | ArgoCD | Kyverno | Kustomize**
+>
+> **Status:** Multi-cloud implementation complete and locally validated.
+> Cloud deployment manifests and provider wiring are ready for controlled AWS
+> and GCP rollout.
 
-- **Infrastructure:** Terraform (AWS EKS, VPC, IRSA/OIDC, S3 remote state)
-- **GitOps controller:** ArgoCD, installed by Terraform's Helm provider (App-of-Apps pattern)
-- **Workload:** Frontend + Backend API + Redis cache, three plain Kubernetes microservices
-- **Automation:** GitHub Actions for Terraform linting/validation/security scanning, plus manifest validation and image builds
+## Overview
 
----
+`multicloud-gitops` is a Terraform and ArgoCD platform for running the same
+workload stack across AWS EKS and GCP GKE. It supports development, staging,
+and production environments while keeping infrastructure and application
+delivery declarative.
 
-## 1. Architecture
+The current operating model uses **two independent ArgoCD instances**:
+
+- one ArgoCD instance bootstrapped in AWS EKS
+- one ArgoCD instance bootstrapped in GCP GKE
+- shared GitOps sources with environment/cloud-specific ApplicationSets
+
+The repository has been validated locally without creating or modifying AWS or
+GCP resources. The Terraform modules, cloud-specific roots, provider aliases,
+ArgoCD bootstrap, and GitOps ApplicationSets are designed for deployment to
+both platforms.
+
+### Validation status
+
+| Area | Status |
+|---|---|
+| AWS EKS Terraform implementation | Ready for controlled deployment |
+| GCP GKE Terraform implementation | Ready for controlled deployment |
+| Independent ArgoCD model | Implemented |
+| Dev/staging/prod ApplicationSets | Implemented |
+| Local Kubernetes and ArgoCD validation | Passed |
+| Live AWS/GCP deployment verification | Pending explicit cloud approval |
+
+## Problem Statement
+
+Teams operating Kubernetes across multiple cloud providers commonly face:
+
+- duplicated cluster and application configuration
+- inconsistent promotion between environments
+- manual drift caused by direct cluster changes
+- unclear ownership between Terraform and Kubernetes tooling
+- cloud-specific secrets and state being mixed together
+- difficult local validation before cloud deployment
+
+This project addresses those problems with modular Terraform, App-of-Apps,
+ApplicationSets, policy-as-code, environment overlays, and automated
+validation.
+
+## Objectives
+
+- Provision repeatable AWS EKS and GCP GKE foundations.
+- Install ArgoCD declaratively in each cluster.
+- Deploy frontend, backend, and Redis consistently across clouds.
+- Support dev, staging, and production overlays.
+- Keep Terraform state isolated per environment and cloud.
+- Enforce workload policies with Kyverno.
+- Validate manifests and Terraform locally and in CI.
+- Avoid cloud access during local development and testing.
+
+## Architecture
+
+### Current architecture: independent ArgoCD instances
 
 ```mermaid
-flowchart TB
-    subgraph GIT["Git Repository (source of truth)"]
-        TF["terraform/"]
-        GO["gitops/apps + gitops/infrastructure"]
-        K8S["k8s-manifests/"]
+flowchart LR
+    DEV["Engineer / Pull Request"]:::actor --> GIT["GitHub Repository"]:::git
+    GIT --> CI["GitHub Actions<br/>YAML • Kustomize • Terraform"]:::ci
+
+    GIT --> AWSROOT["AWS Terraform Root"]:::terraform
+    GIT --> GCPROOT["GCP Terraform Root"]:::terraform
+
+    subgraph AWS["AWS Cloud"]
+        AWSROOT --> EKS["EKS Cluster"]:::aws
+        EKS --> ARGOAWS["ArgoCD AWS"]:::argo
+        ARGOAWS --> AWSINFRA["Ingress • cert-manager<br/>Kyverno • Observability"]:::platform
+        ARGOAWS --> AWSAPPS["Frontend • Backend • Redis"]:::app
     end
 
-    subgraph CI["GitHub Actions"]
-        TFCI["terraform-ci.yml\nfmt / validate / tfsec"]
-        APPCI["app-ci.yml\nmanifest validation / image build"]
+    subgraph GCP["GCP Cloud"]
+        GCPROOT --> GKE["GKE Cluster"]:::gcp
+        GKE --> ARGOGCP["ArgoCD GCP"]:::argo
+        ARGOGCP --> GCPINFRA["Ingress • cert-manager<br/>Kyverno • Observability"]:::platform
+        ARGOGCP --> GCPAPPS["Frontend • Backend • Redis"]:::app
     end
 
-    subgraph AWS["AWS Account"]
-        subgraph EKS["EKS Cluster"]
-            ARGO["ArgoCD\n(installed by Terraform Helm provider)"]
-            NGINX["ingress-nginx"]
-            CERT["cert-manager"]
-            FE["frontend Deployment"]
-            BE["backend Deployment"]
-            REDIS["redis Deployment"]
-        end
-    end
-
-    DEV["Engineer"] -->|"git push / PR"| GIT
-    GIT --> CI
-    TF -->|"terraform apply\n(one-time / infra changes)"| EKS
-    TF -->|"installs via helm_release"| ARGO
-    ARGO -->|"watches & pulls"| GO
-    GO -->|"points at"| K8S
-    ARGO -->|"sync + prune + self-heal"| NGINX
-    ARGO --> CERT
-    ARGO --> FE
-    ARGO --> BE
-    ARGO --> REDIS
-    BE -->|"reads/writes cache"| REDIS
-    NGINX -->|"routes HTTP(S)"| FE
-    FE -->|"REST calls"| BE
+    classDef actor fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:2px;
+    classDef git fill:#ede9fe,stroke:#7c3aed,color:#3b0764,stroke-width:2px;
+    classDef ci fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px;
+    classDef terraform fill:#e0e7ff,stroke:#4f46e5,color:#312e81,stroke-width:2px;
+    classDef aws fill:#ffedd5,stroke:#ea580c,color:#7c2d12,stroke-width:2px;
+    classDef gcp fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:2px;
+    classDef argo fill:#fce7f3,stroke:#db2777,color:#831843,stroke-width:2px;
+    classDef platform fill:#f3f4f6,stroke:#4b5563,color:#111827;
+    classDef app fill:#cffafe,stroke:#0891b2,color:#164e63,stroke-width:2px;
 ```
 
-**Two different control loops, on purpose:**
+### Ownership boundaries
 
-| Layer | Owned by | Changed by |
+| Layer | Owner | Change mechanism |
 |---|---|---|
-| VPC, EKS cluster, node group, ArgoCD install | Terraform | `terraform apply` (rare — infra changes) |
-| Everything running *inside* the cluster (apps, ingress-nginx, cert-manager) | ArgoCD | `git push` (constant — day-to-day changes) |
+| VPC, EKS, GKE, node pools, IAM, ArgoCD installation | Terraform | Deliberate Terraform execution |
+| Cluster add-ons and workloads | ArgoCD | Git change through ApplicationSets |
+| Policies | Kyverno through ArgoCD | Versioned policy manifest |
+| CI validation | GitHub Actions | Pull request or protected branch workflow |
 
-Terraform's job ends the moment ArgoCD is up and the root `Application` is
-applied. After that, Terraform never touches the cluster's workloads again —
-ArgoCD owns them.
+### Next phase: single-control-plane evolution
 
----
+The future design may host one ArgoCD control plane in one cluster and register
+the other cluster as an external target. That model provides centralized
+visibility, but requires secure cross-cloud cluster credentials, stronger
+RBAC, and a deliberate external-secrets strategy. The trade-off is documented
+in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## 2. Repository layout
+## Technologies
 
+- **Infrastructure:** Terraform, AWS EKS, GCP GKE, VPC/VPC networking
+- **Cloud identity:** AWS IRSA/OIDC, GCP Workload Identity
+- **GitOps:** ArgoCD, App-of-Apps, ApplicationSets
+- **Workloads:** Kubernetes, Kustomize, frontend, backend, Redis StatefulSet
+- **Platform services:** ingress-nginx, cert-manager, Kyverno
+- **Observability:** kube-prometheus-stack Application, Prometheus/Grafana
+- **Validation:** Terraform validate, kubeconform, yamllint, kubectl, Kustomize
+- **CI/CD:** GitHub Actions
+- **Supply chain:** Trivy filesystem scanning and CycloneDX SBOM artifacts
+- **Local testing:** kind and Docker (optional, disposable)
+
+## Security Considerations
+
+- Do not commit cloud credentials, kubeconfig files, Terraform state, or
+  plaintext secrets.
+- Use separate Terraform state per cloud and environment.
+- Use AWS IRSA and GCP Workload Identity instead of static pod credentials.
+- Keep ArgoCD cluster credentials scoped to the cluster they manage.
+- Redis credentials are represented by a secret contract, not committed values.
+- Use Kyverno to enforce CPU and memory requests/limits on application
+  workloads.
+- Review ArgoCD projects, destination restrictions, repository access, and
+  sync permissions before production use.
+- Use private cluster endpoints, network policies, and encrypted state where
+  supported by the target platform.
+
+## Implementation
+
+### Infrastructure
+
+- `terraform/modules/eks` provisions AWS networking, EKS, node groups, and
+  IRSA/OIDC-related resources.
+- `terraform/modules/gke` provisions GCP networking, GKE, node pools, and
+  Workload Identity resources.
+- `terraform/modules/argocd` installs ArgoCD through Helm and applies the root
+  App-of-Apps Application.
+- Independent roots exist under
+  `terraform/environments/{dev,staging,prod}/{aws,gcp}`.
+
+### GitOps
+
+- `gitops/root-app-of-apps.yaml` is the Terraform-rendered bootstrap object.
+- `gitops/clusters/*.yaml` contains six environment/cloud ApplicationSets.
+- ApplicationSets select Kustomize overlays for frontend, backend, and Redis.
+- Infrastructure and policy Applications are synced by the root Application.
+- `gitops/platform/workloads` defines namespace quotas and default limits.
+- `gitops/secrets` contains disabled External Secrets templates only.
+
+## Testing
+
+Completed local validation includes:
+
+- YAML parsing for ApplicationSets, infrastructure, and policy manifests.
+- Server-side dry-run of all six ApplicationSets against local ArgoCD CRDs.
+- Kustomize rendering for all nine environment overlays.
+- Terraform validation for all six environment roots.
+- Local ArgoCD synchronization using a disposable kind cluster and Git mirror.
+- Kyverno rejection test for a workload without resource limits.
+- Supply-chain checks are defined for filesystem vulnerabilities, secrets,
+  misconfiguration, and repository SBOM generation.
+
+Safe validation commands:
+
+```bash
+# No cloud access: configuration validation only
+for root in \
+  terraform/environments/dev/aws \
+  terraform/environments/dev/gcp \
+  terraform/environments/staging/aws \
+  terraform/environments/staging/gcp \
+  terraform/environments/prod/aws \
+  terraform/environments/prod/gcp; do
+  terraform -chdir="$root" validate
+done
+
+# Local manifest rendering
+for overlay in \
+  gitops/apps/frontend/overlays/{dev,staging,prod} \
+  gitops/apps/backend/overlays/{dev,staging,prod} \
+  gitops/apps/redis/overlays/{dev,staging,prod}; do
+  kubectl kustomize "$overlay" >/dev/null
+done
 ```
+
+Do not run `terraform apply`, remote-backend initialization, AWS CLI, or GCP
+CLI commands during local-only testing.
+
+## Results
+
+- Multi-cloud Terraform structure exists for AWS EKS and GCP GKE.
+- Six environment/cloud ApplicationSets are implemented.
+- AWS EKS and GCP GKE deployment paths are fully wired in Terraform and GitOps.
+- Workload overlays render successfully.
+- Policy and observability integrations are represented as GitOps Applications.
+- Workload governance, PDBs, topology spreading, and security policies are
+  included in the declarative baseline.
+- Disaster recovery, promotion, and troubleshooting runbooks are included.
+- CI validates all environment Terraform roots and GitOps overlays.
+- Local test resources were removed after validation.
+- No AWS or GCP resources were created during local development.
+
+## Limitations
+
+- Real EKS/GKE deployment has not been performed in this validation session.
+- Live AWS/GCP runtime verification remains a controlled deployment step and
+  is intentionally not claimed by this repository's local test results.
+- Full Terraform plans require cloud-provider credentials and may contact cloud
+  APIs; they were intentionally not run.
+- Remote S3/GCS backends are documented but not configured with real buckets.
+- External Secrets Operator is not yet wired to AWS Secrets Manager or GCP
+  Secret Manager.
+- Redis is single-replica per cluster; cross-cloud active-active replication is
+  not automatic.
+- The local kind node was too small for the full observability stack, so its
+  local tuning was temporary and documented separately.
+
+## Future Improvements
+
+1. Enable and validate the External Secrets Operator templates per cloud.
+2. Define an explicit active-active, active-passive, or split-by-service policy.
+3. Add cross-cloud traffic management and DNS/failover strategy.
+4. Configure production remote state backends and locking.
+5. Add OpenTelemetry, OpenCost, and Kepler integrations where required.
+6. Implement the documented single-control-plane ArgoCD evolution.
+7. Add image signing, digest enforcement, and admission signature verification.
+8. Exercise the disaster-recovery runbook with restore testing.
+
+## Installation
+
+### Local, no-cloud validation
+
+This is the recommended first step. It validates repository configuration and
+does not create a Kubernetes cluster or contact AWS/GCP:
+
+```bash
+chmod +x scripts/validate-local.sh
+./scripts/validate-local.sh
+```
+
+The script requires Ruby, `kubectl`, and Terraform. It does not run
+`terraform init`, configure a remote backend, use AWS/GCP CLIs, or evaluate a
+cloud provider plan.
+
+### Optional local kind deployment
+
+This section deploys only to a disposable local Docker/kind cluster. Do not use
+`scripts/bootstrap.sh` for this workflow: that script is intentionally the
+cloud EKS bootstrap and can create paid AWS resources.
+
+#### 1. Install local tools
+
+Install Docker Desktop, kind, kubectl, and optionally the ArgoCD CLI using
+your operating system package manager. Start Docker Desktop before creating
+the cluster.
+
+#### 2. Create a disposable cluster
+
+```bash
+kind create cluster --name gitops-local
+kubectl config use-context kind-gitops-local
+kubectl get nodes
+```
+
+If the cluster already exists, verify the context before using it:
+
+```bash
+kubectl config current-context
+kind get clusters
+```
+
+#### 3. Build and load local images
+
+The manifests reference GHCR images. If local application source and
+Dockerfiles are available, build and load images into kind:
+
+```bash
+docker build -t ghcr.io/whitepearl404/frontend:local ./frontend
+docker build -t ghcr.io/whitepearl404/backend:local ./backend
+kind load docker-image ghcr.io/whitepearl404/frontend:local --name gitops-local
+kind load docker-image ghcr.io/whitepearl404/backend:local --name gitops-local
+```
+
+Before applying an overlay, change its image tag to `:local` or use a local
+Kustomize image override. Never add registry credentials to Git.
+
+#### 4. Create the local workload secret
+
+```bash
+kubectl create namespace workloads --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n workloads create secret generic redis-credentials \
+  --from-literal=redis-password='local-only-change-me' \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+#### 5. Render and apply one local environment
+
+Start with development because production overlays intentionally request more
+resources:
+
+```bash
+kubectl apply -k gitops/apps/frontend/overlays/dev
+kubectl apply -k gitops/apps/backend/overlays/dev
+kubectl apply -k gitops/apps/redis/overlays/dev
+kubectl -n workloads get pods,svc,pvc
+```
+
+#### 6. Optional local ArgoCD test
+
+Install ArgoCD only into the disposable kind cluster:
+
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
+```
+
+For an offline test, use a local Git mirror and replace the repository URL and
+revision in a rendered copy of the root Application. Do not point local tests
+at a production branch when testing prune or self-heal behavior:
+
+```bash
+kubectl apply --dry-run=server -f /tmp/root-app-rendered.yaml
+kubectl apply -f /tmp/root-app-rendered.yaml
+kubectl -n argocd get applications,applicationsets
+```
+
+#### 7. Test policy and workload health
+
+```bash
+kubectl apply --dry-run=server \
+  -f gitops/policies/policy-resource-limits.yaml
+kubectl -n workloads rollout status deployment/frontend
+kubectl -n workloads rollout status deployment/backend
+kubectl -n workloads rollout status statefulset/redis
+```
+
+#### 8. Clean up every local resource
+
+```bash
+kubectl delete namespace workloads argocd --ignore-not-found
+kind delete cluster --name gitops-local
+docker ps --format '{{.Names}}'
+kind get clusters
+```
+
+These cleanup commands affect only the named local kind cluster and its Docker
+container. Confirm no cloud context is selected before running `kubectl`.
+
+### Cloud deployment
+
+Cloud deployment is intentionally separate and requires explicit credentials,
+backend configuration, review, and cost approval. For each environment/cloud:
+
+```bash
+terraform -chdir=terraform/environments/dev/aws init \
+  -backend-config=backend.hcl
+terraform -chdir=terraform/environments/dev/aws plan
+terraform -chdir=terraform/environments/dev/aws apply
+```
+
+Repeat with the appropriate GCP root and environment only after verifying the
+target account/project and intended resources.
+
+## Usage
+
+1. Create a pull request for infrastructure or GitOps changes.
+2. Let CI validate Terraform, YAML, and Kustomize output.
+3. Merge the reviewed change into the configured Git branch.
+4. ArgoCD in each target cluster reconciles its own ApplicationSet.
+5. Inspect sync and health status with:
+
+```bash
+kubectl -n argocd get applications
+kubectl -n argocd get applicationsets
+```
+
+## Project Structure
+
+```text
 .
-├── .github/workflows/       # CI: terraform lint/validate/security, manifest validation, image builds
-├── terraform/                # Root module: wires eks + argocd modules together
+├── .github/workflows/
+│   ├── app-ci.yml
+│   └── terraform-ci.yml
+├── terraform/
+│   ├── environments/{dev,staging,prod}/{aws,gcp}/
 │   └── modules/
-│       ├── eks/               # VPC, subnets, NAT, EKS cluster, managed node group, OIDC/IRSA
-│       └── argocd/             # Installs ArgoCD via Helm, applies the root App-of-Apps
+│       ├── eks/
+│       ├── gke/
+│       └── argocd/
 ├── gitops/
-│   ├── root-app-of-apps.yaml   # The ONE manifest Terraform applies by hand
-│   ├── infrastructure/          # ArgoCD Applications for cluster add-ons (ingress-nginx, cert-manager)
-│   └── apps/                     # ArgoCD Applications for the microservices
-├── k8s-manifests/               # Plain Kubernetes YAML the apps/ Applications point at
+│   ├── root-app-of-apps.yaml
+│   ├── clusters/                 # six environment/cloud ApplicationSets
+│   ├── apps/                    # Kustomize overlays and values
+│   ├── infrastructure/          # cluster add-on Applications
+│   ├── policies/                # Kyverno policy and Application
+│   └── observability/           # local testing and operating notes
+├── k8s-manifests/
 │   ├── frontend/
 │   ├── backend/
 │   └── redis/
-└── scripts/bootstrap.sh          # One command: cluster up -> kubeconfig -> secret -> verify sync
+├── gitops/platform/workloads/   # quotas, limits, and workload governance
+├── gitops/secrets/              # disabled cloud secret templates
+├── docs/                        # DR, promotion, and troubleshooting runbooks
+├── ARCHITECTURE.md
+└── scripts/
+    ├── validate-local.sh        # repository-only validation; no cloud access
+    └── bootstrap.sh             # cloud EKS bootstrap; use intentionally
 ```
 
----
+## Demo
 
-## 3. Prerequisites
+The local demonstration used a disposable kind cluster, local ArgoCD, a temporary Git mirror, and server-side
+Kubernetes dry-runs. The cluster and temporary Git daemon were deleted after testing.
 
-- An AWS account with permission to create VPCs, EKS clusters, and IAM roles
-- Terraform >= 1.6
-- AWS CLI v2, authenticated (`aws sts get-caller-identity` should work)
-- `kubectl`
-- An S3 bucket + DynamoDB table for Terraform's remote state lock (see `terraform/providers.tf`)
-- A fork of this repository (ArgoCD needs a Git URL it can reach)
+## References
 
----
+- [ArgoCD ApplicationSets](https://argo-cd.readthedocs.io/en/stable/user-guide/application-set/)
+- [ArgoCD App-of-Apps pattern](https://argo-cd.readthedocs.io/en/stable/operator-manual/cluster-bootstrapping/)
+- [Terraform AWS provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [Terraform Google provider](https://registry.terraform.io/providers/hashicorp/google/latest/docs)
+- [Amazon EKS](https://docs.aws.amazon.com/eks/)
+- [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine/docs)
+- [Kyverno](https://kyverno.io/docs/)
+- [Kustomize](https://kubectl.docs.kubernetes.io/references/kustomize/)
 
-## 4. Step-by-step deployment
+## License
 
-### Step 1 — Fork and point the manifests at your fork
-
-ArgoCD needs to clone *your* copy of this repo, not the original. Replace
-the placeholder `repoURL` in these three files with your fork's clone URL:
-
-```
-gitops/apps/frontend.yaml
-gitops/apps/backend.yaml
-gitops/apps/redis.yaml
-```
-
-### Step 2 — Configure Terraform
-
-```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars: set git_repo_url to your fork, adjust region/sizing as needed
-
-terraform init -backend-config="bucket=<your-state-bucket>" \
-                -backend-config="key=multicloud-gitops/terraform.tfstate" \
-                -backend-config="region=<your-region>" \
-                -backend-config="dynamodb_table=<your-lock-table>"
-```
-
-### Step 3 — Run the bootstrap script
-
-```bash
-cd ..
-./scripts/bootstrap.sh
-```
-
-This single script:
-1. Runs `terraform validate` and `terraform apply` — creates the VPC, EKS cluster, node group, and installs ArgoCD via the Helm provider, then applies the root `Application`.
-2. Runs `aws eks update-kubeconfig` so your local `kubectl` can reach the new cluster.
-3. Creates the `redis-credentials` Secret (see **Secrets**, below) if it doesn't already exist.
-4. Polls the root `Application` until ArgoCD reports it `Synced` and `Healthy`, then lists every Application it is now managing.
-
-### Step 4 — Watch ArgoCD take over
-
-```bash
-kubectl -n argocd port-forward svc/argocd-server 8080:443
-# open https://localhost:8080
-# username: admin
-# password: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
-```
-
-You'll see `ingress-nginx`, `cert-manager`, `frontend`, `backend`, and `redis`
-Applications appear automatically — nobody ran `kubectl apply` on any of them.
-
-### Step 5 — Tear down
-
-```bash
-terraform -chdir=terraform destroy
-```
-
----
-
-## 5. Secrets
-
-`k8s-manifests/backend/deployment.yaml` and `k8s-manifests/redis/deployment.yaml`
-both read a Redis password from a Secret named `redis-credentials` via
-`secretKeyRef` — the password is never written in plain text in any file
-ArgoCD syncs.
-
-That Secret is **intentionally not a file in this repository.**
-`scripts/bootstrap.sh` creates it once, with a randomly generated value, the
-first time you bootstrap. Committing a real Secret object to Git — even
-"just for now" — defeats the purpose of a Secret.
-
-For a real production fork, replace that manual step with one of:
-- **Sealed Secrets** — encrypt the value locally with `kubeseal`, commit the
-  resulting `SealedSecret` CRD (safe, since only the in-cluster controller
-  can decrypt it), add the sealed-secrets controller as another
-  `gitops/infrastructure/*.yaml` Application.
-- **External Secrets Operator** — sync the value from AWS Secrets Manager /
-  SSM Parameter Store into a Secret automatically, no manual step at all.
-
----
-
-## 6. How GitOps prevents drift
-
-This is the property that makes ArgoCD worth using instead of a deploy script,
-and it's the section a technical screener will usually ask about first.
-
-**The problem GitOps solves:** in a traditional pipeline, `kubectl apply` or
-`helm upgrade` changes the cluster *once*, at deploy time. If someone later
-runs a manual `kubectl edit`, a hotfix `kubectl scale`, or a well-meaning
-"just this once" change directly against the cluster, nothing detects it.
-The cluster's real state quietly drifts away from what's in Git, and Git
-stops being trustworthy.
-
-**How this repo prevents it, concretely:**
-
-1. **Git is the only accepted input.** Every Application in `gitops/apps/`
-   and `gitops/infrastructure/` has `syncPolicy.automated` set — ArgoCD's
-   controller continuously diffs the live cluster state against the
-   manifests in Git, not the other way around.
-2. **`selfHeal: true` reverts manual changes automatically.** If anyone runs
-   `kubectl scale deployment/backend --replicas=10` by hand, ArgoCD notices
-   the live state no longer matches Git within its next reconciliation loop
-   (default: every few minutes, or immediately on webhook) and scales it
-   back to whatever Git says. The cluster cannot stay drifted.
-3. **`prune: true` deletes what Git no longer defines.** Delete a YAML file
-   from `k8s-manifests/frontend/`, merge that PR, and the corresponding
-   object disappears from the cluster on the next sync — no orphaned
-   resources lingering from a forgotten manual `kubectl apply`.
-4. **The `Synced` / `Healthy` status is queryable and provable.** Anyone —
-   an auditor, a teammate, a screener — can run
-   `kubectl -n argocd get applications` and get an honest, live answer to
-   "does the cluster actually match Git right now?" There's no need to trust
-   a deploy log or a Slack message; the controller's own state *is* the
-   audit trail.
-5. **Rollback is a `git revert`, not a runbook.** Because the cluster is a
-   pure function of the Git tree ArgoCD is pointed at, undoing a bad change
-   is the same operation as undoing a bad commit anywhere else — no
-   cluster-specific tribal knowledge required.
-
-The only manual step in this entire repository, ever, is the very first
-`terraform apply` that installs ArgoCD and applies the root `Application`.
-Everything after that is GitOps.
-
----
-
-## 7. Application services
-
-`frontend/` and `backend/` are minimal, deliberately simple Node.js apps —
-just enough to prove the whole system (Ingress → frontend → backend →
-Redis) actually works end to end. Swap either one for your real
-application whenever you have it; keep the same port, env vars, and
-`/healthz` contract and nothing else in this repo needs to change.
-
-| | Frontend | Backend |
-|---|---|---|
-| Port | 8080 (non-root, can't bind 80 — see the comment in `k8s-manifests/frontend/deployment.yaml`) | 8080 |
-| Reads | `BACKEND_API_URL` | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` |
-| Probe path | `/` | `/healthz` |
-| Dependencies | none (built-in `http` + `fetch`) | `redis` npm client |
-
-What it does: `GET /` on the frontend calls `GET /api/count` on the backend,
-which runs `INCR` against Redis and returns the running total. The frontend
-renders it in a plain HTML page. Both sides are written to **fail
-gracefully, never crash**: if the backend is down, the frontend still
-returns `HTTP 200` (with a visible "backend unreachable" message) instead
-of failing its own probe; if Redis is down, the backend's `/healthz` still
-returns `200` while `/api/count` returns `503` — a downstream outage never
-takes an otherwise-healthy pod out of rotation.
-
-**Run either one directly with Node** (fastest inner loop, no Docker):
-```bash
-cd backend && npm install
-REDIS_HOST=localhost REDIS_PORT=6379 REDIS_PASSWORD=<yours> PORT=8080 npm start
-# in another terminal:
-cd frontend && BACKEND_API_URL=http://localhost:8080 PORT=8081 npm start
-curl http://localhost:8081/
-```
-
-**Build the images locally:**
-```bash
-docker build -t frontend:local ./frontend
-docker build -t backend:local ./backend
-```
-
-**Load them into a local `kind` cluster** (kind can't see your local Docker
-images otherwise):
-```bash
-kind load docker-image frontend:local --name gitops-local
-kind load docker-image backend:local --name gitops-local
-kubectl -n workloads set image deployment/frontend frontend=frontend:local
-kubectl -n workloads set image deployment/backend backend=backend:local
-```
-
----
-
-## 8. CI/CD
-
-- **`terraform-ci.yml`** — on every PR touching `terraform/`: `terraform fmt -check`,
-  `terraform validate`, and a `tfsec` security scan, with results posted as a
-  PR comment. A second job auto-merges the PR (via GitHub's native auto-merge,
-  gated on the checks above passing) — but only for Dependabot PRs or PRs a
-  human has explicitly labeled `automerge`. Nothing merges itself without
-  either passing checks *and* an explicit trust signal.
-- **`app-ci.yml`** — validates every file under `k8s-manifests/` and `gitops/`
-  with `yamllint` and `kubeconform` on every PR. On merges to `main`, it also
-  builds and pushes `frontend`/`backend` container images to GHCR at exactly
-  the tags `k8s-manifests/*/deployment.yaml` already expect
-  (`ghcr.io/<owner>/frontend:latest`, `ghcr.io/<owner>/backend:latest`, plus
-  a `:<git-sha>` tag) — now that both directories have a `Dockerfile`, this
-  job runs for real instead of skipping.
-
----
-
-## 9. Known follow-ups before this is truly production-ready
-
-- If you change `argocd_namespace` away from the default `"argocd"` in
-  `terraform.tfvars`, also update `metadata.namespace: argocd` in
-  `gitops/apps/*.yaml` and `gitops/infrastructure/*.yaml` — those five files
-  are static (ArgoCD discovers them as-is, not through Terraform's
-  `templatefile()`), so they don't pick up the variable automatically.
-- Create a `ClusterIssuer` named `letsencrypt-prod` (referenced by
-  `k8s-manifests/frontend/ingress.yaml`) with your own ACME email address —
-  intentionally left out of Git rather than committed with a placeholder
-  email that would silently be wrong.
-- ~~Replace the `ghcr.io/your-org/frontend:latest` / `backend:latest` image
-  placeholders~~ — done. `frontend/` and `backend/` now contain minimal,
-  tested placeholder apps (see **Application services**, above).
-  `app-ci.yml`'s build job will produce real images at those exact tags
-  automatically once you push to `main`.
-- Add a `terraform/modules/gke` module if you want the GCP side of "multi-cloud."
-- Consider Sealed Secrets or External Secrets Operator instead of the manual
-  `redis-credentials` step (see **Secrets**, above) once you have more than
-  one engineer running bootstrap.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for
+the complete license text.
