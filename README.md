@@ -13,6 +13,17 @@ anyone touches** — ArgoCD does the rest.
 
 ## 1. Architecture
 
+### Current active decision: two independent ArgoCD instances
+
+This repository currently implements the lower-risk, easier-to-operate model:
+
+- one ArgoCD instance inside the AWS EKS cluster
+- one ArgoCD instance inside the GCP GKE cluster
+- each cluster owns its own root Application and its own cluster-specific ApplicationSet
+- the application manifests remain shared, but each cluster is bootstrapped independently
+
+This is the model we are using right now because it avoids cross-cloud Secret distribution, avoids provisioning a single shared control plane during bootstrap, and keeps each cloud environment isolated.
+
 ```mermaid
 flowchart TB
     subgraph GIT["Git Repository (source of truth)"]
@@ -21,37 +32,67 @@ flowchart TB
         K8S["k8s-manifests/"]
     end
 
-    subgraph CI["GitHub Actions"]
-        TFCI["terraform-ci.yml\nfmt / validate / tfsec"]
-        APPCI["app-ci.yml\nmanifest validation / image build"]
-    end
-
     subgraph AWS["AWS Account"]
         subgraph EKS["EKS Cluster"]
-            ARGO["ArgoCD\n(installed by Terraform Helm provider)"]
-            NGINX["ingress-nginx"]
-            CERT["cert-manager"]
-            FE["frontend Deployment"]
-            BE["backend Deployment"]
-            REDIS["redis Deployment"]
+            ARGO_A["ArgoCD (AWS)"]
+            FE_A["frontend"]
+            BE_A["backend"]
+            REDIS_A["redis"]
+        end
+    end
+
+    subgraph GCP["GCP Project"]
+        subgraph GKE["GKE Cluster"]
+            ARGO_G["ArgoCD (GCP)"]
+            FE_G["frontend"]
+            BE_G["backend"]
+            REDIS_G["redis"]
         end
     end
 
     DEV["Engineer"] -->|"git push / PR"| GIT
-    GIT --> CI
-    TF -->|"terraform apply\n(one-time / infra changes)"| EKS
-    TF -->|"installs via helm_release"| ARGO
-    ARGO -->|"watches & pulls"| GO
-    GO -->|"points at"| K8S
-    ARGO -->|"sync + prune + self-heal"| NGINX
-    ARGO --> CERT
-    ARGO --> FE
-    ARGO --> BE
-    ARGO --> REDIS
-    BE -->|"reads/writes cache"| REDIS
-    NGINX -->|"routes HTTP(S)"| FE
-    FE -->|"REST calls"| BE
+    GIT --> TF
+    TF -->|"bootstrap each cluster"| ARGO_A
+    TF -->|"bootstrap each cluster"| ARGO_G
+    ARGO_A --> GO
+    ARGO_G --> GO
+    ARGO_A --> FE_A
+    ARGO_A --> BE_A
+    ARGO_A --> REDIS_A
+    ARGO_G --> FE_G
+    ARGO_G --> BE_G
+    ARGO_G --> REDIS_G
 ```
+
+### Next phase: single control plane spanning both clouds
+
+This is intentionally documented as the next-phase evolution, not the current active model.
+
+The future state is:
+
+- one ArgoCD control plane (for example in EKS)
+- the second cluster registered as an external target
+- one ApplicationSet or cluster generator that fans out to both clusters
+- a deliberate cross-cloud secret strategy (e.g. External Secrets Operator or Sealed Secrets)
+
+This is the more "pure" multi-cloud GitOps model, but it comes with higher operational complexity and stronger security requirements.
+
+## Roadmap
+
+### Current status
+
+This repo currently implements the two-independent-ArgoCD-instances model.
+
+### Next evolution
+
+The next phase is a single ArgoCD control plane spanning both clouds:
+
+- host ArgoCD in one cluster
+- register the other cluster as an external target
+- use one cluster generator or multi-cluster ApplicationSet
+- move from cloud-local secret handling to a shared cross-cloud secret strategy
+
+This is intentionally a second-phase evolution because it adds cluster-registration security and external-secret complexity beyond the current bootstrap model.
 
 **Two different control loops, on purpose:**
 
