@@ -7,14 +7,14 @@ metadata:
     app.kubernetes.io/part-of: platform
 spec:
   generators:
-  - list:
-      elements:
-      - appName: frontend
-        appPath: gitops/apps/frontend/overlays/dev
-      - appName: backend
-        appPath: gitops/apps/backend/overlays/dev
-      - appName: redis
-        appPath: gitops/apps/redis/overlays/dev
+    - list:
+        elements:
+          - appName: frontend
+            appPath: gitops/apps/frontend/overlays/dev
+          - appName: backend
+            appPath: gitops/apps/backend/overlays/dev
+          - appName: redis
+            appPath: gitops/apps/redis/overlays/dev
   template:
     metadata:
       name: '{{appName}}-dev-gcp'

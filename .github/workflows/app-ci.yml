@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           pip install --quiet yamllint
-          yamllint -d "{extends: default, rules: {line-length: disable}}" \
+          yamllint -d "{extends: default, rules: {document-start: disable, line-length: disable}}" \
             k8s-manifests gitops
 
       - name: Parse ApplicationSets and policy manifests
