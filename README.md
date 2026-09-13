@@ -298,6 +298,5 @@ testing.
 
 ## License
 
-No license file is currently included in this repository. Add an explicit
-license before distributing the project publicly or accepting external
-contributions.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for
+the complete license text.
