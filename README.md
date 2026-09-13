@@ -177,8 +177,7 @@ for overlay in \
 done
 ```
 
-Do not run `terraform apply`, remote-backend initialization, AWS CLI, or GCP
-CLI commands during local-only testing.
+Do not run AWS CLI, or GCP CLI commands during local-only testing.
 
 ## Results
 
@@ -188,7 +187,7 @@ CLI commands during local-only testing.
 - Policy and observability integrations are represented as GitOps Applications.
 - CI validates all environment Terraform roots and GitOps overlays.
 - Local test resources were removed after validation.
-- No AWS or GCP resources were created during development.
+- No AWS or GCP resources were created during local development.
 
 ## Limitations
 
