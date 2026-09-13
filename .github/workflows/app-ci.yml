@@ -1,6 +1,7 @@
 name: Application & Manifest CI
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "k8s-manifests/**"
