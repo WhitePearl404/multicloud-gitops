@@ -1,27 +1,25 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: kyverno-policies
+  name: workloads-governance
   namespace: argocd
   finalizers:
     - resources-finalizer.argocd.argoproj.io
   labels:
-    app.kubernetes.io/part-of: platform-policies
+    app.kubernetes.io/part-of: platform-governance
 spec:
   project: default
   source:
     repoURL: https://github.com/WhitePearl404/multicloud-gitops.git
     targetRevision: main
-    path: gitops/policies
-    directory:
-      recurse: false
-      include: policy-*.yaml
+    path: gitops/platform/workloads
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: workloads
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
+      - CreateNamespace=true
       - ServerSideApply=true

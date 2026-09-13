@@ -106,6 +106,7 @@ in [ARCHITECTURE.md](ARCHITECTURE.md).
 - **Observability:** kube-prometheus-stack Application, Prometheus/Grafana
 - **Validation:** Terraform validate, kubeconform, yamllint, kubectl, Kustomize
 - **CI/CD:** GitHub Actions
+- **Supply chain:** Trivy filesystem scanning and CycloneDX SBOM artifacts
 - **Local testing:** kind and Docker (optional, disposable)
 
 ## Security Considerations
@@ -142,6 +143,8 @@ in [ARCHITECTURE.md](ARCHITECTURE.md).
 - `gitops/clusters/*.yaml` contains six environment/cloud ApplicationSets.
 - ApplicationSets select Kustomize overlays for frontend, backend, and Redis.
 - Infrastructure and policy Applications are synced by the root Application.
+- `gitops/platform/workloads` defines namespace quotas and default limits.
+- `gitops/secrets` contains disabled External Secrets templates only.
 
 ## Testing
 
@@ -153,6 +156,8 @@ Completed local validation includes:
 - Terraform validation for all six environment roots.
 - Local ArgoCD synchronization using a disposable kind cluster and Git mirror.
 - Kyverno rejection test for a workload without resource limits.
+- Supply-chain checks are defined for filesystem vulnerabilities, secrets,
+  misconfiguration, and repository SBOM generation.
 
 Safe validation commands:
 
@@ -185,6 +190,9 @@ Do not run AWS CLI, or GCP CLI commands during local-only testing.
 - Six environment/cloud ApplicationSets are implemented.
 - Workload overlays render successfully.
 - Policy and observability integrations are represented as GitOps Applications.
+- Workload governance, PDBs, topology spreading, and security policies are
+  included in the declarative baseline.
+- Disaster recovery, promotion, and troubleshooting runbooks are included.
 - CI validates all environment Terraform roots and GitOps overlays.
 - Local test resources were removed after validation.
 - No AWS or GCP resources were created during local development.
@@ -204,15 +212,14 @@ Do not run AWS CLI, or GCP CLI commands during local-only testing.
 
 ## Future Improvements
 
-1. Add External Secrets Operator integrations for AWS and GCP.
+1. Enable and validate the External Secrets Operator templates per cloud.
 2. Define an explicit active-active, active-passive, or split-by-service policy.
 3. Add cross-cloud traffic management and DNS/failover strategy.
 4. Configure production remote state backends and locking.
 5. Add OpenTelemetry, OpenCost, and Kepler integrations where required.
 6. Implement the documented single-control-plane ArgoCD evolution.
-7. Add image signing, SBOM generation, admission verification, and stronger
-   supply-chain controls.
-8. Add disaster-recovery runbooks and restore testing.
+7. Add image signing, digest enforcement, and admission signature verification.
+8. Exercise the disaster-recovery runbook with restore testing.
 
 ## Installation
 
@@ -273,6 +280,9 @@ kubectl -n argocd get applicationsets
 │   ├── frontend/
 │   ├── backend/
 │   └── redis/
+├── gitops/platform/workloads/   # quotas, limits, and workload governance
+├── gitops/secrets/              # disabled cloud secret templates
+├── docs/                        # DR, promotion, and troubleshooting runbooks
 ├── ARCHITECTURE.md
 └── scripts/
 ```
