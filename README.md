@@ -226,8 +226,123 @@ CLI commands during local-only testing.
 
 ### Local, no-cloud validation
 
-Use the validation commands in [Testing](#testing). This path does not create
-cloud resources.
+This is the recommended first step. It validates repository configuration and
+does not create a Kubernetes cluster or contact AWS/GCP:
+
+```bash
+chmod +x scripts/validate-local.sh
+./scripts/validate-local.sh
+```
+
+The script requires Ruby, `kubectl`, and Terraform. It does not run
+`terraform init`, configure a remote backend, use AWS/GCP CLIs, or evaluate a
+cloud provider plan.
+
+### Optional local kind deployment
+
+This section deploys only to a disposable local Docker/kind cluster. Do not use
+`scripts/bootstrap.sh` for this workflow: that script is intentionally the
+cloud EKS bootstrap and can create paid AWS resources.
+
+#### 1. Install local tools
+
+Install Docker Desktop, kind, kubectl, and optionally the ArgoCD CLI using
+your operating system package manager. Start Docker Desktop before creating
+the cluster.
+
+#### 2. Create a disposable cluster
+
+```bash
+kind create cluster --name gitops-local
+kubectl config use-context kind-gitops-local
+kubectl get nodes
+```
+
+If the cluster already exists, verify the context before using it:
+
+```bash
+kubectl config current-context
+kind get clusters
+```
+
+#### 3. Build and load local images
+
+The manifests reference GHCR images. If local application source and
+Dockerfiles are available, build and load images into kind:
+
+```bash
+docker build -t ghcr.io/whitepearl404/frontend:local ./frontend
+docker build -t ghcr.io/whitepearl404/backend:local ./backend
+kind load docker-image ghcr.io/whitepearl404/frontend:local --name gitops-local
+kind load docker-image ghcr.io/whitepearl404/backend:local --name gitops-local
+```
+
+Before applying an overlay, change its image tag to `:local` or use a local
+Kustomize image override. Never add registry credentials to Git.
+
+#### 4. Create the local workload secret
+
+```bash
+kubectl create namespace workloads --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n workloads create secret generic redis-credentials \
+  --from-literal=redis-password='local-only-change-me' \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+#### 5. Render and apply one local environment
+
+Start with development because production overlays intentionally request more
+resources:
+
+```bash
+kubectl apply -k gitops/apps/frontend/overlays/dev
+kubectl apply -k gitops/apps/backend/overlays/dev
+kubectl apply -k gitops/apps/redis/overlays/dev
+kubectl -n workloads get pods,svc,pvc
+```
+
+#### 6. Optional local ArgoCD test
+
+Install ArgoCD only into the disposable kind cluster:
+
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl -n argocd rollout status deployment/argocd-server --timeout=300s
+```
+
+For an offline test, use a local Git mirror and replace the repository URL and
+revision in a rendered copy of the root Application. Do not point local tests
+at a production branch when testing prune or self-heal behavior:
+
+```bash
+kubectl apply --dry-run=server -f /tmp/root-app-rendered.yaml
+kubectl apply -f /tmp/root-app-rendered.yaml
+kubectl -n argocd get applications,applicationsets
+```
+
+#### 7. Test policy and workload health
+
+```bash
+kubectl apply --dry-run=server \
+  -f gitops/policies/policy-resource-limits.yaml
+kubectl -n workloads rollout status deployment/frontend
+kubectl -n workloads rollout status deployment/backend
+kubectl -n workloads rollout status statefulset/redis
+```
+
+#### 8. Clean up every local resource
+
+```bash
+kubectl delete namespace workloads argocd --ignore-not-found
+kind delete cluster --name gitops-local
+docker ps --format '{{.Names}}'
+kind get clusters
+```
+
+These cleanup commands affect only the named local kind cluster and its Docker
+container. Confirm no cloud context is selected before running `kubectl`.
 
 ### Cloud deployment
 
@@ -286,6 +401,8 @@ kubectl -n argocd get applicationsets
 ├── docs/                        # DR, promotion, and troubleshooting runbooks
 ├── ARCHITECTURE.md
 └── scripts/
+    ├── validate-local.sh        # repository-only validation; no cloud access
+    └── bootstrap.sh             # cloud EKS bootstrap; use intentionally
 ```
 
 ## Demo
